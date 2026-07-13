@@ -103,7 +103,9 @@ function youtubeEmbedUrl(value) {
         ? url.searchParams.get("v") || ""
         : url.pathname.match(/^\/(?:embed|shorts)\/([^/?]+)/)?.[1] || "";
     }
-    return /^[A-Za-z0-9_-]{6,20}$/.test(id) ? `https://www.youtube.com/embed/${id}` : "";
+    return /^[A-Za-z0-9_-]{6,20}$/.test(id)
+      ? `https://www.youtube.com/embed/${id}?origin=${encodeURIComponent(window.location.origin)}`
+      : "";
   } catch {
     return "";
   }
@@ -267,7 +269,7 @@ function PropertyDetailPage({ id }) {
       </aside>
     </section>
     <section className="property-description"><p className="eyebrow">Overview</p><h2>About this property</h2><p>{item.description || "Contact Universal Group for complete property details, availability and a guided site visit."}</p></section>
-    {embedUrl && <section className="property-video"><div><p className="eyebrow">Video Tour</p><h2>Explore the property</h2></div><div className="video-frame"><iframe src={embedUrl} title={`${item.name} video tour`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen/></div></section>}
+    {embedUrl && <section className="property-video"><div><p className="eyebrow">Video Tour</p><h2>Explore the property</h2></div><div className="video-frame"><iframe src={embedUrl} title={`${item.name} video tour`} referrerPolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen/></div></section>}
   </main>;
 }
 

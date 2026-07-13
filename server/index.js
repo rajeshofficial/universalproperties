@@ -18,7 +18,15 @@ const app = express();
 const defaultPort = process.env.NODE_ENV === "production" ? 3000 : 3001;
 const port = Number(process.env.PORT || defaultPort);
 
-app.use(helmet({ crossOriginResourcePolicy: { policy: "same-origin" } }));
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "same-origin" },
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  contentSecurityPolicy: {
+    directives: {
+      frameSrc: ["'self'", "https://www.youtube.com", "https://www.youtube-nocookie.com"],
+    },
+  },
+}));
 app.use(express.json({ limit: "1mb" }));
 
 const loginLimiter = rateLimit({
