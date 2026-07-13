@@ -31,7 +31,7 @@ const loginLimiter = rateLimit({
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024, files: 7 },
   fileFilter: (_req, file, callback) => {
     const allowed = ["image/jpeg", "image/png", "image/webp"];
     const accepted = allowed.includes(file.mimetype);
@@ -41,6 +41,10 @@ const upload = multer({
 
 function serializeProperty(document) {
   const item = document.toObject ? document.toObject() : document;
+  const version = new Date(item.updatedAt).getTime();
+  const imageUrls = item.images?.length
+    ? item.images.map((_image, index) => `/api/properties/${item._id}/images/${index}?v=${version}`)
+    : item.image?.contentType ? [`/api/properties/${item._id}/image?v=${version}`] : [];
   return {
     id: item._id.toString(),
     title: item.title,
@@ -50,11 +54,13 @@ function serializeProperty(document) {
     property_type: item.property_type,
     price: item.price,
     description: item.description,
+    youtube_url: item.youtube_url || "",
     bedrooms: item.bedrooms,
     bathrooms: item.bathrooms,
     status: item.status,
     featured: Boolean(item.featured),
-    image_url: item.image?.contentType ? `/api/properties/${item._id}/image?v=${new Date(item.updatedAt).getTime()}` : null,
+    image_url: imageUrls[0] || null,
+    image_urls: imageUrls,
     created_at: item.createdAt,
     updated_at: item.updatedAt,
   };
@@ -69,6 +75,7 @@ function propertyValues(body) {
     property_type: String(body.property_type || body.category || "").trim(),
     price: String(body.price || "").trim(),
     description: String(body.description || "").trim(),
+    youtube_url: String(body.youtube_url || "").trim(),
     bedrooms: body.bedrooms === "" || body.bedrooms == null ? null : Number(body.bedrooms),
     bathrooms: body.bathrooms === "" || body.bathrooms == null ? null : Number(body.bathrooms),
     status: String(body.status || "Available").trim(),
@@ -76,10 +83,31 @@ function propertyValues(body) {
   };
 }
 
-function validateProperty(values, imageRequired, file) {
+function youtubeVideoId(value) {
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+    let id = "";
+    if (hostname === "youtu.be") id = url.pathname.split("/").filter(Boolean)[0] || "";
+    if (["youtube.com", "m.youtube.com"].includes(hostname)) {
+      id = url.pathname === "/watch"
+        ? url.searchParams.get("v") || ""
+        : url.pathname.match(/^\/(?:embed|shorts)\/([^/?]+)/)?.[1] || "";
+    }
+    return /^[A-Za-z0-9_-]{6,20}$/.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+function validateProperty(values, imageRequired, files = []) {
   const missing = ["title", "category", "location", "area", "property_type", "price"].filter((key) => !values[key]);
   if (missing.length) return `Missing required fields: ${missing.join(", ")}`;
-  if (imageRequired && !file) return "A property image is required";
+  if (imageRequired && !files.length) return "Please select between 1 and 7 property images";
+  if (files.length > 7) return "A property can have a maximum of 7 images";
+  if (files.reduce((total, file) => total + file.size, 0) > 14 * 1024 * 1024) return "The combined image size must be smaller than 14MB";
+  if (values.youtube_url && youtubeVideoId(values.youtube_url) === null) return "Enter a valid YouTube video link";
   if (values.bedrooms != null && (!Number.isInteger(values.bedrooms) || values.bedrooms < 0)) return "Bedrooms must be a whole number";
   if (values.bathrooms != null && (!Number.isInteger(values.bathrooms) || values.bathrooms < 0)) return "Bathrooms must be a whole number";
   return null;
@@ -125,6 +153,21 @@ app.get("/api/properties/:id/image", validId, async (req, res, next) => {
     res.set("Content-Type", item.image.contentType);
     res.set("Cache-Control", "public, max-age=31536000, immutable");
     res.send(item.image.data);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/properties/:id/images/:index", validId, async (req, res, next) => {
+  try {
+    const index = Number(req.params.index);
+    if (!Number.isInteger(index) || index < 0 || index > 6) return res.status(400).end();
+    const item = await Property.findById(req.params.id).select("+images.data images.contentType updatedAt");
+    const image = item?.images?.[index];
+    if (!image?.data) return res.status(404).end();
+    res.set("Content-Type", image.contentType);
+    res.set("Cache-Control", "public, max-age=31536000, immutable");
+    res.send(image.data);
   } catch (error) {
     next(error);
   }
@@ -178,14 +221,14 @@ app.post("/api/admin/change-password", requireAdmin, async (req, res, next) => {
   }
 });
 
-app.post("/api/admin/properties", requireAdmin, upload.single("image"), async (req, res, next) => {
+app.post("/api/admin/properties", requireAdmin, upload.array("images", 7), async (req, res, next) => {
   try {
     const values = propertyValues(req.body);
-    const problem = validateProperty(values, true, req.file);
+    const problem = validateProperty(values, true, req.files);
     if (problem) return res.status(400).json({ error: problem });
     const item = await Property.create({
       ...values,
-      image: { data: req.file.buffer, contentType: req.file.mimetype },
+      images: req.files.map((file) => ({ data: file.buffer, contentType: file.mimetype })),
     });
     res.status(201).json(serializeProperty(item));
   } catch (error) {
@@ -193,12 +236,12 @@ app.post("/api/admin/properties", requireAdmin, upload.single("image"), async (r
   }
 });
 
-app.put("/api/admin/properties/:id", requireAdmin, validId, upload.single("image"), async (req, res, next) => {
+app.put("/api/admin/properties/:id", requireAdmin, validId, upload.array("images", 7), async (req, res, next) => {
   try {
     const values = propertyValues(req.body);
-    const problem = validateProperty(values, false, req.file);
+    const problem = validateProperty(values, false, req.files);
     if (problem) return res.status(400).json({ error: problem });
-    if (req.file) values.image = { data: req.file.buffer, contentType: req.file.mimetype };
+    if (req.files.length) values.images = req.files.map((file) => ({ data: file.buffer, contentType: file.mimetype }));
     const item = await Property.findByIdAndUpdate(req.params.id, values, { new: true, runValidators: true });
     if (!item) return res.status(404).json({ error: "Property not found" });
     res.json(serializeProperty(item));
@@ -225,7 +268,12 @@ if (process.env.NODE_ENV === "production") {
 app.use((error, _req, res, _next) => {
   console.error(error);
   if (error instanceof multer.MulterError) {
-    return res.status(400).json({ error: error.code === "LIMIT_FILE_SIZE" ? "Image must be smaller than 5MB" : error.message });
+    const message = error.code === "LIMIT_FILE_SIZE"
+      ? "Each image must be smaller than 5MB"
+      : error.code === "LIMIT_FILE_COUNT" || error.code === "LIMIT_UNEXPECTED_FILE"
+        ? "A property can have a maximum of 7 images"
+        : error.message;
+    return res.status(400).json({ error: message });
   }
   if (error.name === "ValidationError") return res.status(400).json({ error: error.message });
   res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Server error" : error.message });

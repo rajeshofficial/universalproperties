@@ -9,6 +9,7 @@ const propertySchema = new mongoose.Schema(
     property_type: { type: String, required: true, trim: true, maxlength: 80 },
     price: { type: String, required: true, trim: true, maxlength: 80 },
     description: { type: String, trim: true, maxlength: 5000, default: "" },
+    youtube_url: { type: String, trim: true, maxlength: 500, default: "" },
     bedrooms: { type: Number, min: 0, default: null },
     bathrooms: { type: Number, min: 0, default: null },
     status: { type: String, enum: ["Available", "Sold", "Rented"], default: "Available", index: true },
@@ -17,6 +18,10 @@ const propertySchema = new mongoose.Schema(
       data: { type: Buffer, select: false },
       contentType: { type: String },
     },
+    images: [{
+      data: { type: Buffer, select: false },
+      contentType: { type: String, required: true },
+    }],
   },
   { timestamps: true, autoIndex: false },
 );

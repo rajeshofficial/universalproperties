@@ -69,6 +69,9 @@ async function readJson(response) {
 }
 
 function apiProperty(item) {
+  const images = item.image_urls?.length
+    ? item.image_urls
+    : [item.image_url || "/assets/apartment.jpg"];
   return {
     id: item.id,
     tag: item.category,
@@ -82,8 +85,28 @@ function apiProperty(item) {
     bathrooms: item.bathrooms,
     status: item.status,
     featured: item.featured,
-    image: item.image_url || "/assets/apartment.jpg",
+    youtube_url: item.youtube_url || "",
+    images,
+    image: images[0],
   };
+}
+
+function youtubeEmbedUrl(value) {
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+    let id = "";
+    if (host === "youtu.be") id = url.pathname.split("/").filter(Boolean)[0] || "";
+    if (["youtube.com", "m.youtube.com"].includes(host)) {
+      id = url.pathname === "/watch"
+        ? url.searchParams.get("v") || ""
+        : url.pathname.match(/^\/(?:embed|shorts)\/([^/?]+)/)?.[1] || "";
+    }
+    return /^[A-Za-z0-9_-]{6,20}$/.test(id) ? `https://www.youtube.com/embed/${id}` : "";
+  } catch {
+    return "";
+  }
 }
 
 function useProperties(fallback = properties) {
@@ -132,7 +155,7 @@ function PropertyCard({ item }) {
       <div className="property-body">
         <h3>{item.name}</h3><p className="location"><Icon name="pin" size={15} />{item.place}</p>
         <div className="property-meta"><span><Icon name="expand" size={16} />{item.area}</span><span><Icon name="home" size={16} />{item.type}</span></div>
-        <div className="property-footer"><strong>{item.price}</strong><a href="/contact">View Details <Arrow /></a></div>
+        <div className="property-footer"><strong>{item.price}</strong><a href={item.id ? `/properties/${item.id}` : "/contact"}>View Details <Arrow /></a></div>
       </div>
     </article>
   );
@@ -204,6 +227,50 @@ function PropertiesPage() {
   </main>;
 }
 
+function PropertyDetailPage({ id }) {
+  const [item, setItem] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(0);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/properties/${id}`)
+      .then(async (response) => {
+        const data = await readJson(response);
+        if (!response.ok) throw new Error(data.error || "Property not found");
+        return data;
+      })
+      .then((data) => active && setItem(apiProperty(data)))
+      .catch((err) => active && setError(err.message));
+    return () => { active = false; };
+  }, [id]);
+
+  if (error) return <main><PageHero eyebrow="Property" title="Property not found" copy={error}/><div className="not-found"><a className="button primary" href="/properties">Back to Properties</a></div></main>;
+  if (!item) return <main className="property-detail-loading"><p>Loading property details…</p></main>;
+
+  const embedUrl = youtubeEmbedUrl(item.youtube_url);
+  return <main className="property-detail-page">
+    <section className="property-detail-heading">
+      <div><p className="eyebrow">{item.tag}</p><h1>{item.name}</h1><p><Icon name="pin" size={17}/>{item.place}</p></div>
+      <div><span>{item.status}</span><strong>{item.price}</strong></div>
+    </section>
+    <section className="property-detail-layout">
+      <div className="property-gallery">
+        <div className="gallery-main"><img src={item.images[selectedImage]} alt={`${item.name} view ${selectedImage + 1}`}/><span>{selectedImage + 1} / {item.images.length}</span></div>
+        {item.images.length > 1 && <div className="gallery-thumbnails">{item.images.map((image, index)=><button className={selectedImage === index ? "selected" : ""} type="button" onClick={()=>setSelectedImage(index)} key={image}><img src={image} alt={`Select view ${index + 1}`}/></button>)}</div>}
+      </div>
+      <aside className="property-summary">
+        <h2>Property Details</h2>
+        <dl><div><dt>Property type</dt><dd>{item.type}</dd></div><div><dt>Area</dt><dd>{item.area}</dd></div>{item.bedrooms != null && <div><dt>Bedrooms</dt><dd>{item.bedrooms}</dd></div>}{item.bathrooms != null && <div><dt>Bathrooms</dt><dd>{item.bathrooms}</dd></div>}<div><dt>Status</dt><dd>{item.status}</dd></div></dl>
+        <a className="button primary" href={`/contact?property=${encodeURIComponent(item.name)}`}>Enquire About This Property <Arrow /></a>
+        <a className="detail-phone" href="tel:9999561999"><Icon name="phone" size={18}/> Call +91 9999561999</a>
+      </aside>
+    </section>
+    <section className="property-description"><p className="eyebrow">Overview</p><h2>About this property</h2><p>{item.description || "Contact Universal Group for complete property details, availability and a guided site visit."}</p></section>
+    {embedUrl && <section className="property-video"><div><p className="eyebrow">Video Tour</p><h2>Explore the property</h2></div><div className="video-frame"><iframe src={embedUrl} title={`${item.name} video tour`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen/></div></section>}
+  </main>;
+}
+
 function ServicesPage() {
   return <main><PageHero eyebrow="Services" title="Everything you need, under one roof" copy="From your first site visit to home-loan disbursal — we handle it end-to-end." />
     <section className="services-page page-section"><div className="service-grid">{services.map(([icon,title,copy])=><article className="service-card large" key={title}><span className="service-icon"><Icon name={icon}/></span><h3>{title}</h3><p>{copy}</p><a href="/contact">Learn more <Arrow /></a></article>)}</div></section>
@@ -236,7 +303,7 @@ function ContactPage() {
 
 const emptyProperty = {
   title: "", category: "Apartment", location: "", area: "", property_type: "Apartment",
-  price: "", description: "", bedrooms: "", bathrooms: "", status: "Available", featured: false,
+  price: "", description: "", youtube_url: "", bedrooms: "", bathrooms: "", status: "Available", featured: false,
 };
 
 function AdminPage() {
@@ -244,7 +311,7 @@ function AdminPage() {
   const [login, setLogin] = useState({ username: "admin", password: "" });
   const [form, setForm] = useState(emptyProperty);
   const [editingId, setEditingId] = useState("");
-  const [image, setImage] = useState(null);
+  const [images, setImages] = useState([]);
   const [items, setItems] = useState([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -310,7 +377,7 @@ function AdminPage() {
   };
 
   const resetForm = () => {
-    setForm(emptyProperty); setEditingId(""); setImage(null);
+    setForm(emptyProperty); setEditingId(""); setImages([]);
     const input = document.getElementById("property-image");
     if (input) input.value = "";
   };
@@ -321,7 +388,7 @@ function AdminPage() {
     try {
       const payload = new FormData();
       Object.entries(form).forEach(([key, value]) => payload.append(key, String(value)));
-      if (image) payload.append("image", image);
+      images.forEach((image) => payload.append("images", image));
       const url = editingId ? `/api/admin/properties/${editingId}` : "/api/admin/properties";
       const response = await fetch(url, {
         method: editingId ? "PUT" : "POST",
@@ -343,10 +410,11 @@ function AdminPage() {
     setForm({
       title: item.title, category: item.category, location: item.location, area: item.area,
       property_type: item.property_type, price: item.price, description: item.description || "",
+      youtube_url: item.youtube_url || "",
       bedrooms: item.bedrooms ?? "", bathrooms: item.bathrooms ?? "", status: item.status,
       featured: Boolean(item.featured),
     });
-    setImage(null); setMessage(""); setError("");
+    setImages([]); setMessage(""); setError("");
     window.scrollTo({ top: 360, behavior: "smooth" });
   };
 
@@ -372,7 +440,7 @@ function AdminPage() {
   }
 
   return <main className="admin-page"><PageHero eyebrow="Dashboard" title="Manage Properties" copy="Publish, edit and remove website listings." />
-    <section className="admin-shell page-section"><div className="admin-toolbar"><div><h2>{editingId ? "Edit Property" : "Add Property"}</h2><p>Fields marked * are required. Images: JPG, PNG or WebP, maximum 5MB.</p></div><div className="admin-toolbar-actions"><button className="admin-logout" onClick={()=>setShowPasswordForm(!showPasswordForm)}>Change password</button><button className="admin-logout" onClick={logout}>Log out</button></div></div>
+    <section className="admin-shell page-section"><div className="admin-toolbar"><div><h2>{editingId ? "Edit Property" : "Add Property"}</h2><p>Fields marked * are required. Select 1–7 JPG, PNG or WebP images (5MB each, 14MB combined).</p></div><div className="admin-toolbar-actions"><button className="admin-logout" onClick={()=>setShowPasswordForm(!showPasswordForm)}>Change password</button><button className="admin-logout" onClick={logout}>Log out</button></div></div>
       {error && <div className="admin-alert error">{error}</div>}{message && <div className="admin-alert success">{message}</div>}
       {showPasswordForm && <form className="admin-password-form form-card" onSubmit={changePassword}>
         <div><h3>Change admin password</h3><p>Use at least 12 characters. You will be signed out after changing it.</p></div>
@@ -391,7 +459,8 @@ function AdminPage() {
         <label>Bedrooms<input name="bedrooms" type="number" min="0" value={form.bedrooms} onChange={updateField}/></label>
         <label>Bathrooms<input name="bathrooms" type="number" min="0" value={form.bathrooms} onChange={updateField}/></label>
         <label>Status<select name="status" value={form.status} onChange={updateField}><option>Available</option><option>Sold</option><option>Rented</option></select></label>
-        <label>Property Image {editingId ? "(leave empty to keep current)" : "*"}<input id="property-image" type="file" accept="image/jpeg,image/png,image/webp" required={!editingId} onChange={(e)=>setImage(e.target.files?.[0] || null)}/></label>
+        <label>Property Images {editingId ? "(select new images to replace gallery)" : "*"}<input id="property-image" type="file" accept="image/jpeg,image/png,image/webp" multiple required={!editingId} onChange={(e)=>{const selected = Array.from(e.target.files || []); if (selected.length > 7) { setError("Please select a maximum of 7 images."); e.target.value = ""; setImages([]); } else { setError(""); setImages(selected); }}}/>{images.length > 0 && <small>{images.length} image{images.length === 1 ? "" : "s"} selected</small>}</label>
+        <label>YouTube Video Link<input name="youtube_url" type="url" value={form.youtube_url} onChange={updateField} placeholder="https://www.youtube.com/watch?v=..."/></label>
         <label className="admin-description">Description<textarea name="description" value={form.description} onChange={updateField} placeholder="Property highlights, amenities and nearby landmarks…"/></label>
         <label className="featured-toggle"><input name="featured" type="checkbox" checked={form.featured} onChange={updateField}/> Show in featured listings</label>
         <div className="admin-form-actions"><button className="submit-button" disabled={busy}>{busy ? "Saving…" : editingId ? "Update Property" : "Publish Property"}</button>{editingId && <button type="button" className="cancel-button" onClick={resetForm}>Cancel Edit</button>}</div>
@@ -417,7 +486,9 @@ function Footer() {
 
 function App() {
   const pages = {"/": <HomePage/>, "/about": <AboutPage/>, "/properties": <PropertiesPage/>, "/services": <ServicesPage/>, "/sell": <SellPage/>, "/contact": <ContactPage/>, "/admin": <AdminPage/>};
-  return <><Header />{pages[window.location.pathname] || <NotFoundPage/>}<Footer/><a className="whatsapp" href="https://wa.me/919999561999?text=Hello%20Universal%20Group%2C%20I'd%20like%20to%20enquire%20about%20your%20services." target="_blank" rel="noreferrer" aria-label="Chat on WhatsApp"><Icon name="message" size={28}/></a></>;
+  const propertyMatch = window.location.pathname.match(/^\/properties\/([a-f\d]{24})\/?$/i);
+  const page = propertyMatch ? <PropertyDetailPage id={propertyMatch[1]}/> : pages[window.location.pathname] || <NotFoundPage/>;
+  return <><Header />{page}<Footer/><a className="whatsapp" href="https://wa.me/919999561999?text=Hello%20Universal%20Group%2C%20I'd%20like%20to%20enquire%20about%20your%20services." target="_blank" rel="noreferrer" aria-label="Chat on WhatsApp"><Icon name="message" size={28}/></a></>;
 }
 
 export default App;
