@@ -5,6 +5,7 @@ const propertySchema = new mongoose.Schema(
     title: { type: String, required: true, trim: true, maxlength: 180 },
     category: { type: String, required: true, trim: true, maxlength: 80, index: true },
     location: { type: String, required: true, trim: true, maxlength: 180, index: true },
+    sub_location: { type: String, trim: true, maxlength: 180, default: "", index: true },
     area: { type: String, required: true, trim: true, maxlength: 80 },
     property_type: { type: String, required: true, trim: true, maxlength: 80 },
     price: { type: String, required: true, trim: true, maxlength: 80 },

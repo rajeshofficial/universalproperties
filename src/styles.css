@@ -156,6 +156,13 @@ footer li { margin-bottom: 14px; }
 .filters { margin-bottom: 48px; display: flex; flex-wrap: wrap; gap: 10px; }
 .filters button { padding: 11px 18px; color: #4f5964; border: 1px solid #dfe3e8; border-radius: 999px; background: #fff; font: 500 13px var(--sans); cursor: pointer; }
 .filters button.selected { color: #fff; border-color: var(--navy); background: var(--navy); }
+.property-search-filters { padding: 22px; align-items: end; display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)) auto; border: 1px solid #dfe3e8; border-radius: 14px; background: #fff; box-shadow: 0 10px 25px rgba(15,30,52,.05); }
+.property-search-filters label { display: grid; gap: 8px; color: #273346; font-size: 12px; font-weight: 700; }
+.property-search-filters select { width: 100%; min-height: 46px; padding: 10px 38px 10px 13px; color: #263244; border: 1px solid #d8dde4; border-radius: 9px; background: #fff; font: 14px var(--sans); }
+.property-search-filters .clear-filters, .empty-results button { min-height: 46px; padding: 10px 18px; color: #fff; border: 0; border-radius: 9px; background: var(--navy); font: 700 13px var(--sans); cursor: pointer; }
+.empty-results { margin: 10px auto 38px; padding: 45px 25px; max-width: 1230px; text-align: center; border: 1px dashed #ccd3dc; border-radius: 14px; background: #fff; }
+.empty-results h2 { margin: 0 0 7px; font-size: 28px; }
+.empty-results p { margin: 0 0 20px; color: #68727d; }
 .catalog .property-grid { row-gap: 36px; }
 .services-page { max-width: none; background: #fff; }
 .services-page .service-grid { max-width: 1230px; margin: auto; }
@@ -299,6 +306,7 @@ footer li { margin-bottom: 14px; }
   .story { gap: 45px; }
   .story > img { max-width: 680px; height: 430px; }
   .service-grid { grid-template-columns: repeat(2, 1fr); }
+  .property-search-filters { grid-template-columns: repeat(2, 1fr); }
   .footer-grid { grid-template-columns: repeat(2, 1fr); }
   .admin-property-form, .admin-password-form { grid-template-columns: 1fr; }
   .admin-password-form > div:first-child, .admin-password-form .admin-form-actions { grid-column: auto; }
@@ -335,6 +343,7 @@ footer li { margin-bottom: 14px; }
   .story > img { height: 320px; }
   .check-list, .service-grid { grid-template-columns: 1fr; }
   .filters { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 8px; }
+  .property-search-filters { display: grid; grid-template-columns: 1fr; overflow: visible; }
   .filters button { flex: 0 0 auto; }
   .split-page { gap: 48px; }
   .form-card { padding: 25px 20px; }

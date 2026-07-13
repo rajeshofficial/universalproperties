@@ -76,7 +76,9 @@ function apiProperty(item) {
     id: item.id,
     tag: item.category,
     name: item.title,
-    place: item.location,
+    location: item.location,
+    sub_location: item.sub_location || "",
+    place: item.sub_location ? `${item.sub_location}, ${item.location}` : item.location,
     area: item.area,
     type: item.property_type,
     price: item.price,
@@ -112,7 +114,11 @@ function youtubeEmbedUrl(value) {
 }
 
 function useProperties(fallback = properties) {
-  const [items, setItems] = useState(fallback);
+  const [items, setItems] = useState(fallback.map((item) => ({
+    ...item,
+    location: item.location || item.place,
+    sub_location: item.sub_location || "",
+  })));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -220,12 +226,21 @@ function AboutPage() {
 }
 
 function PropertiesPage() {
-  const [filter, setFilter] = useState("All");
+  const [locationFilter, setLocationFilter] = useState("All");
+  const [subLocationFilter, setSubLocationFilter] = useState("All");
+  const [areaFilter, setAreaFilter] = useState("All");
   const { items, loading } = useProperties();
-  const places = ["All", ...new Set(items.map((item) => item.place))];
-  const filtered = useMemo(() => filter === "All" ? items : items.filter((item) => item.place === filter), [filter, items]);
+  const locations = ["All", ...new Set(items.map((item) => item.location).filter(Boolean))];
+  const subLocations = ["All", ...new Set(items.filter((item) => locationFilter === "All" || item.location === locationFilter).map((item) => item.sub_location).filter(Boolean))];
+  const areas = ["All", ...new Set(items.map((item) => item.area).filter(Boolean))];
+  const filtered = useMemo(() => items.filter((item) =>
+    (locationFilter === "All" || item.location === locationFilter)
+    && (subLocationFilter === "All" || item.sub_location === subLocationFilter)
+    && (areaFilter === "All" || item.area === areaFilter)
+  ), [areaFilter, items, locationFilter, subLocationFilter]);
+  const clearFilters = () => { setLocationFilter("All"); setSubLocationFilter("All"); setAreaFilter("All"); };
   return <main><PageHero eyebrow="Listings" title="Discover Your Next Address" copy="Curated premium properties across Delhi NCR, Sonipat, Gurgaon and Noida." />
-    <section className="catalog page-section"><div className="filters">{places.map(place=><button className={filter === place ? "selected" : ""} onClick={()=>setFilter(place)} key={place}>{place}</button>)}</div>{loading && <p className="loading-note">Checking for new listings…</p>}<div className="property-grid">{filtered.map(item=><PropertyCard item={item} key={item.id || item.name}/>)}</div></section>
+    <section className="catalog page-section"><div className="filters property-search-filters"><label>Location<select value={locationFilter} onChange={(event)=>{setLocationFilter(event.target.value); setSubLocationFilter("All");}}>{locations.map(value=><option value={value} key={value}>{value === "All" ? "All locations" : value}</option>)}</select></label><label>Sub-location<select value={subLocationFilter} onChange={(event)=>setSubLocationFilter(event.target.value)}>{subLocations.map(value=><option value={value} key={value}>{value === "All" ? "All sub-locations" : value}</option>)}</select></label><label>Property area<select value={areaFilter} onChange={(event)=>setAreaFilter(event.target.value)}>{areas.map(value=><option value={value} key={value}>{value === "All" ? "Any area / size" : value}</option>)}</select></label><button type="button" className="clear-filters" onClick={clearFilters}>Clear filters</button></div>{loading && <p className="loading-note">Checking for new listings…</p>}{!loading && !filtered.length && <div className="empty-results"><h2>No properties found</h2><p>Try changing or clearing your filters.</p><button type="button" onClick={clearFilters}>Show all properties</button></div>}<div className="property-grid">{filtered.map(item=><PropertyCard item={item} key={item.id || item.name}/>)}</div></section>
   </main>;
 }
 
@@ -304,7 +319,7 @@ function ContactPage() {
 }
 
 const emptyProperty = {
-  title: "", category: "Apartment", location: "", area: "", property_type: "Apartment",
+  title: "", category: "Apartment", location: "", sub_location: "", area: "", property_type: "Apartment",
   price: "", description: "", youtube_url: "", bedrooms: "", bathrooms: "", status: "Available", featured: false,
 };
 
@@ -411,6 +426,7 @@ function AdminPage() {
     setEditingId(item.id);
     setForm({
       title: item.title, category: item.category, location: item.location, area: item.area,
+      sub_location: item.sub_location || "",
       property_type: item.property_type, price: item.price, description: item.description || "",
       youtube_url: item.youtube_url || "",
       bedrooms: item.bedrooms ?? "", bathrooms: item.bathrooms ?? "", status: item.status,
@@ -454,7 +470,8 @@ function AdminPage() {
       <form className="admin-property-form form-card" onSubmit={saveProperty}>
         <label>Property Title *<input name="title" required value={form.title} onChange={updateField} placeholder="Skyline Residency"/></label>
         <label>Category *<select name="category" value={form.category} onChange={updateField}>{["Apartment","Villa","Commercial","Penthouse","Plot / Land","Builder Floor","Other"].map(x=><option key={x}>{x}</option>)}</select></label>
-        <label>Location *<input name="location" required value={form.location} onChange={updateField} placeholder="Rohini, Delhi"/></label>
+        <label>Location *<input name="location" list="admin-location-options" required value={form.location} onChange={updateField} placeholder="Select or type a new location"/><datalist id="admin-location-options">{[...new Set(items.map((item)=>item.location).filter(Boolean))].map(value=><option value={value} key={value}/>)}</datalist><small>Select an existing location or type a new one.</small></label>
+        <label>Sub-location<input name="sub_location" list="admin-sub-location-options" value={form.sub_location} onChange={updateField} placeholder="Select or type a new sub-location"/><datalist id="admin-sub-location-options">{[...new Set(items.filter((item)=>!form.location || item.location === form.location).map((item)=>item.sub_location).filter(Boolean))].map(value=><option value={value} key={value}/>)}</datalist><small>Example: Sector 24, Dwarka, Golf Course Road.</small></label>
         <label>Area *<input name="area" required value={form.area} onChange={updateField} placeholder="161 gaz"/></label>
         <label>Property Type *<input name="property_type" required value={form.property_type} onChange={updateField} placeholder="Apartment"/></label>
         <label>Price *<input name="price" required value={form.price} onChange={updateField} placeholder="₹ 1.85 Cr"/></label>
@@ -468,7 +485,7 @@ function AdminPage() {
         <div className="admin-form-actions"><button className="submit-button" disabled={busy}>{busy ? "Saving…" : editingId ? "Update Property" : "Publish Property"}</button>{editingId && <button type="button" className="cancel-button" onClick={resetForm}>Cancel Edit</button>}</div>
       </form>
       <div className="admin-list-heading"><h2>Published Properties</h2><span>{items.length} listings</span></div>
-      <div className="admin-property-list">{items.map(item=><article key={item.id}><img src={item.image_url || "/assets/apartment.jpg"} alt=""/><div><span>{item.category} · {item.status}</span><h3>{item.title}</h3><p>{item.location} · {item.area} · {item.price}</p></div><div className="admin-row-actions"><button onClick={()=>editProperty(item)}>Edit</button><button className="danger" onClick={()=>deleteProperty(item)} disabled={busy}>Delete</button></div></article>)}</div>
+      <div className="admin-property-list">{items.map(item=><article key={item.id}><img src={item.image_url || "/assets/apartment.jpg"} alt=""/><div><span>{item.category} · {item.status}</span><h3>{item.title}</h3><p>{item.sub_location ? `${item.sub_location}, ` : ""}{item.location} · {item.area} · {item.price}</p></div><div className="admin-row-actions"><button onClick={()=>editProperty(item)}>Edit</button><button className="danger" onClick={()=>deleteProperty(item)} disabled={busy}>Delete</button></div></article>)}</div>
     </section>
   </main>;
 }

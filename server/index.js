@@ -58,6 +58,7 @@ function serializeProperty(document) {
     title: item.title,
     category: item.category,
     location: item.location,
+    sub_location: item.sub_location || "",
     area: item.area,
     property_type: item.property_type,
     price: item.price,
@@ -79,6 +80,7 @@ function propertyValues(body) {
     title: String(body.title || "").trim(),
     category: String(body.category || "").trim(),
     location: String(body.location || "").trim(),
+    sub_location: String(body.sub_location || "").trim(),
     area: String(body.area || "").trim(),
     property_type: String(body.property_type || body.category || "").trim(),
     price: String(body.price || "").trim(),
@@ -135,6 +137,8 @@ app.get("/api/properties", async (req, res, next) => {
     const filter = {};
     if (req.query.category) filter.category = req.query.category;
     if (req.query.location) filter.location = req.query.location;
+    if (req.query.sub_location) filter.sub_location = req.query.sub_location;
+    if (req.query.area) filter.area = req.query.area;
     if (req.query.featured === "true") filter.featured = true;
     if (req.query.status) filter.status = req.query.status;
     const rows = await Property.find(filter).sort({ featured: -1, createdAt: -1 });
